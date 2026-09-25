@@ -3,7 +3,10 @@ package dev.pinaki.homedeck
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.app.role.RoleManager
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.text.format.DateFormat
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
@@ -43,8 +46,50 @@ import dev.pinaki.homedeck.ui.theme.HomeDeckTheme
 import java.text.Collator
 import java.util.*
 import kotlinx.coroutines.delay
+import org.json.JSONArray
 
 data class LauncherApp(val label: String, val component: ComponentName)
+data class LauncherAction(val name: String)
+
+interface ActionExecutor {
+    fun execute(action: LauncherAction): String?
+}
+
+class NativeActionExecutor(private val activity: ComponentActivity) : ActionExecutor {
+    override fun execute(action: LauncherAction): String? {
+        return try {
+            if (action.name != DEFAULT_APP_ACTION) error("unsupported action")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val roles = activity.getSystemService(RoleManager::class.java)
+                if (roles.isRoleHeld(RoleManager.ROLE_HOME)) return null
+                activity.startActivityForResult(
+                    roles.createRequestRoleIntent(RoleManager.ROLE_HOME), HOME_ROLE_REQUEST,
+                )
+            } else {
+                val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+                val currentHome = activity.packageManager.resolveActivity(
+                    home, PackageManager.MATCH_DEFAULT_ONLY,
+                )
+                if (currentHome?.activityInfo?.packageName == activity.packageName) return null
+                activity.startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
+            }
+            null
+        } catch (_: Exception) {
+            "cannot launch: ${action.name}"
+        }
+    }
+
+    private companion object {
+        const val DEFAULT_APP_ACTION = "Make HomeDeck the default app"
+        const val HOME_ROLE_REQUEST = 1
+    }
+}
+
+internal fun actionQuery(input: String): String? = when {
+    input == "/l" -> ""
+    input.startsWith("/l ") -> input.removePrefix("/l ")
+    else -> null
+}
 
 internal fun <T> filterAndSortApps(
     apps: List<T>, query: String, locale: Locale = Locale.getDefault(), label: (T) -> String,
@@ -53,11 +98,19 @@ internal fun <T> filterAndSortApps(
 
 class MainActivity : ComponentActivity() {
     private var apps by mutableStateOf(emptyList<LauncherApp>())
+    private val actions by lazy {
+        assets.open("actions.json").bufferedReader().use { reader ->
+            JSONArray(reader.readText()).let { json ->
+                List(json.length()) { LauncherAction(json.getJSONObject(it).getString("name")) }
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { HomeDeckTheme { LauncherScreen(apps, ::launch) } }
+        val actionExecutor = NativeActionExecutor(this)
+        setContent { HomeDeckTheme { LauncherScreen(apps, actions, ::launch, actionExecutor::execute) } }
     }
 
     override fun onResume() {
@@ -90,8 +143,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private data class LauncherEntry(val key: String, val label: String, val open: () -> String?)
+
 @Composable
-private fun LauncherScreen(apps: List<LauncherApp>, launch: (LauncherApp) -> String?) {
+private fun LauncherScreen(
+    apps: List<LauncherApp>, actions: List<LauncherAction>,
+    launch: (LauncherApp) -> String?, execute: (LauncherAction) -> String?,
+) {
     val context = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
     val density = LocalDensity.current
@@ -102,12 +160,12 @@ private fun LauncherScreen(apps: List<LauncherApp>, launch: (LauncherApp) -> Str
     var error by remember { mutableStateOf<String?>(null) }
     var ctrl by remember { mutableStateOf(false) }
     var alt by remember { mutableStateOf(false) }
-    val results = remember(apps, input.text) {
-        filterAndSortApps(
-            apps,
-            input.text,
-            label = LauncherApp::label
-        )
+    val results = remember(apps, actions, input.text) {
+        val actionQuery = actionQuery(input.text)
+        if (actionQuery != null) filterAndSortApps(actions, actionQuery, label = LauncherAction::name)
+            .map { LauncherEntry("action:${it.name}", it.name) { execute(it) } }
+        else filterAndSortApps(apps, input.text, label = LauncherApp::label)
+            .map { LauncherEntry(it.component.flattenToString(), it.label) { launch(it) } }
     }
     val now by produceState(Date()) {
         while (true) {
@@ -131,9 +189,9 @@ private fun LauncherScreen(apps: List<LauncherApp>, launch: (LauncherApp) -> Str
     }
     BackHandler { if (input.text.isNotEmpty()) input = TextFieldValue() }
 
-    fun open(app: LauncherApp) {
+    fun open(entry: LauncherEntry) {
         input = TextFieldValue()
-        error = launch(app)
+        error = entry.open()
     }
 
     fun insert(text: String) {
@@ -237,7 +295,7 @@ private fun LauncherScreen(apps: List<LauncherApp>, launch: (LauncherApp) -> Str
             color = MaterialTheme.colorScheme.error,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
         )
-        AppList(results, highlighted, listState, Modifier.weight(1f))
+        LauncherList(results, highlighted, listState, Modifier.weight(1f))
         if (imeVisible) ExtraKeys(ctrl, alt) { key ->
             when (key) {
                 "CTRL" -> ctrl = !ctrl
@@ -262,16 +320,16 @@ private fun LauncherScreen(apps: List<LauncherApp>, launch: (LauncherApp) -> Str
 }
 
 @Composable
-private fun AppList(
-    apps: List<LauncherApp>, highlighted: Int, state: LazyListState,
+private fun LauncherList(
+    entries: List<LauncherEntry>, highlighted: Int, state: LazyListState,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
         state = state, userScrollEnabled = false, modifier = modifier.fillMaxWidth(),
     ) {
-        itemsIndexed(apps, key = { _, app -> app.component.flattenToString() }) { index, app ->
+        itemsIndexed(entries, key = { _, entry -> entry.key }) { index, entry ->
             Text(
-                app.label,
+                entry.label,
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 2.dp)

@@ -15,4 +15,15 @@ class LauncherFilterTest {
 
     @Test fun noMatchReturnsEmptyList() =
         assertEquals(emptyList<String>(), filterAndSortApps(apps, "terminal", Locale.US) { it })
+
+    @Test fun launcherActionCommandExtractsItsQueryOnly() {
+        assertEquals("", actionQuery("/l"))
+        assertEquals("default", actionQuery("/l default"))
+        assertEquals(null, actionQuery("/launch"))
+    }
+
+    @Test fun actionFilteringIgnoresCase() {
+        val actions = listOf(LauncherAction("Make HomeDeck the default app"))
+        assertEquals(actions, filterAndSortApps(actions, actionQuery("/l HOME")!!) { it.name })
+    }
 }
