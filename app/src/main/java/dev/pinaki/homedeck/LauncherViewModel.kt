@@ -16,13 +16,22 @@ internal fun actionQuery(input: String): String? = when {
     else -> null
 }
 
+internal fun appQuery(input: String): String? = when {
+    input == "/apps" -> ""
+    input.startsWith("/apps ") -> input.removePrefix("/apps ")
+    else -> null
+}
+
 internal fun shortcutQuery(input: String): String? =
     input.takeIf { it.startsWith("/shortcut ") }?.removePrefix("/shortcut ")
 
-internal val launcherCommands = listOf("launch" to "/launch", "shortcut" to "/shortcut", "help" to "/help")
+internal val launcherCommands = listOf(
+    "apps" to "/apps", "launch" to "/launch", "shortcut" to "/shortcut", "help" to "/help",
+)
 
 internal val launcherHelp = listOf(
     "/help" to "Command reference",
+    "/apps [query]" to "Search installed apps",
     "/launch <query>" to "Search actions",
     "/shortcut [query]" to "Manage or search shortcuts",
     "Alt+D" to "Uninstall selected app or delete selected shortcut",
@@ -338,19 +347,23 @@ internal class LauncherViewModel(
         }
         ShortcutPage.CONFIRM -> listOf(LauncherEntry("shortcut:save", "Save shortcut", target = LauncherTarget.SaveShortcut))
         null -> {
+            val appQuery = appQuery(state.input.text)
             val query = actionQuery(state.input.text)
             val shortcutQuery = shortcutQuery(state.input.text)
             when {
                 state.input.text == "/help" -> launcherHelp.mapIndexed { index, (label, description) ->
                     LauncherEntry("help:$index", label, description = description, target = LauncherTarget.Reference)
                 }
-                state.input.text.startsWith("/") && query == null && shortcutQuery == null ->
+                state.input.text.startsWith("/") && appQuery == null && query == null && shortcutQuery == null ->
                     launcherCommands.filter { (_, completion) -> completion.startsWith(state.input.text) }
                         .map { (label, completion) ->
                             LauncherEntry("command:$label", label, completion, LauncherTarget.Command(completion))
                         }
                 query != null -> filterAndSortApps(actions, query, label = LauncherAction::name).map {
                     LauncherEntry("action:${it.name}", it.name, target = LauncherTarget.Action(it))
+                }
+                appQuery != null -> filterAndSortApps(apps, appQuery, label = LauncherApp::label).map {
+                    LauncherEntry(it.component.flattenToString(), it.label, target = LauncherTarget.App(it))
                 }
                 shortcutQuery != null -> filterAndSortApps(shortcuts, shortcutQuery, label = Shortcut::name).map {
                     LauncherEntry("shortcut:${it.name}", it.name, target = LauncherTarget.SavedShortcut(it))

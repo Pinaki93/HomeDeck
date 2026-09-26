@@ -23,13 +23,24 @@ class LauncherScreenTest {
 
     @Test fun rendersAppsCommandsAndNoResults() {
         val model = model()
-        model.updateSources(apps = listOf(LauncherApp("Calculator", ComponentName("test", "Calculator"))))
+        model.updateSources(
+            apps = listOf(LauncherApp("Calculator", ComponentName("test", "Calculator"))),
+            shortcuts = listOf(Shortcut("Calendar")),
+        )
         compose.setContent { HomeDeckTheme { LauncherScreen(model) { null } } }
         compose.onNodeWithText("Calculator").assertExists()
 
         compose.runOnIdle { model.edit(value("/")) }
+        compose.onNodeWithText("apps").assertExists()
         compose.onNodeWithText("launch").assertExists()
         compose.onNodeWithText("shortcut").assertExists()
+
+        compose.runOnIdle {
+            model.edit(value("/apps"))
+            assertEquals(listOf("Calculator"), model.state.results.map { it.label })
+            model.edit(value("/apps calc"))
+            assertEquals(listOf("Calculator"), model.state.results.map { it.label })
+        }
 
         compose.runOnIdle { model.edit(value("missing")) }
         compose.onNodeWithText("command not found: missing").assertExists()
@@ -41,7 +52,7 @@ class LauncherScreenTest {
         compose.setContent { HomeDeckTheme { LauncherScreen(model) { null } } }
 
         compose.runOnIdle {
-            model.edit(value("/")); model.moveSelection(1); model.advance(); model.moveSelection(-99)
+            model.edit(value("/")); model.moveSelection(2); model.advance(); model.moveSelection(-99)
         }
         compose.onNodeWithText("Add shortcut").assertExists()
         compose.onNodeWithText("Existing").assertExists()

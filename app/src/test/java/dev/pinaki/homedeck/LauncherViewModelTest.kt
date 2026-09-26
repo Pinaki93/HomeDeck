@@ -14,16 +14,17 @@ class LauncherViewModelTest {
     @Test fun commandsFilteringSelectionAndEditing() {
         val model = model()
         model.edit(value("/"))
-        assertEquals(listOf("launch", "shortcut", "help"), model.state.results.map { it.label })
+        assertEquals(listOf("apps", "launch", "shortcut", "help"), model.state.results.map { it.label })
         model.edit(value("/lau"))
         assertEquals(listOf("launch"), model.state.results.map { it.label })
         model.moveSelection(99)
         assertEquals(0, model.state.highlighted)
         model.edit(value("/"))
         model.moveSelection(99)
-        assertEquals(2, model.state.highlighted)
+        assertEquals(3, model.state.highlighted)
         model.moveSelection(-99)
         assertEquals(0, model.state.highlighted)
+        model.moveSelection(1)
         model.tab()
         assertEquals("/launch", model.state.input.text)
 
@@ -32,7 +33,7 @@ class LauncherViewModelTest {
         model.advance()
         model.edit(value("/"))
         assertNull(model.state.shortcutPage)
-        assertEquals(listOf("launch", "shortcut", "help"), model.state.results.map { it.label })
+        assertEquals(listOf("apps", "launch", "shortcut", "help"), model.state.results.map { it.label })
 
         model.edit(value("/launch DEFAULT"))
         assertEquals(listOf("Make default"), model.state.results.map { it.label })
@@ -209,7 +210,7 @@ class LauncherViewModelTest {
     @Test fun shortcutPresetPopulatesIntentAndAnyAppLeavesPackageEmpty() {
         val model = model(FakePackageStore(Result.success(listOf(LauncherPackage("Dialer", "com.example.dialer")))))
         model.edit(value("/"))
-        model.moveSelection(1)
+        model.moveSelection(2)
         model.advance() // menu
         model.advance() // add
 
@@ -285,7 +286,7 @@ class LauncherViewModelTest {
         model.edit(value("new"))
         assertEquals(listOf("News"), model.state.results.map { it.label })
         model.edit(value("/"))
-        model.moveSelection(1)
+        model.moveSelection(2)
         model.advance()
         model.moveSelection(1)
         model.advance()
@@ -299,7 +300,7 @@ class LauncherViewModelTest {
 
     private fun openShortcutForm(model: LauncherViewModel) {
         model.edit(value("/"))
-        model.moveSelection(1)
+        model.moveSelection(2)
         model.advance() // menu
         model.moveSelection(-99)
         model.advance() // add

@@ -34,11 +34,20 @@ class LauncherFilterTest {
         assertEquals(null, actionQuery("/l"))
     }
 
+    @Test fun appCommandExtractsItsQueryOnly() {
+        assertEquals("", appQuery("/apps"))
+        assertEquals("calc", appQuery("/apps calc"))
+        assertEquals(null, appQuery("/app"))
+    }
+
     @Test fun actionFilteringIgnoresCase() {
         val actions = listOf(LauncherAction("Make HomeDeck the default app"))
         assertEquals(actions, filterAndSortApps(actions, actionQuery("/launch HOME")!!) { it.name })
     }
 
     @Test fun slashShowsLaunchCommand() =
-        assertEquals(listOf("launch" to "/launch", "shortcut" to "/shortcut", "help" to "/help"), launcherCommands)
+        assertEquals(
+            listOf("apps" to "/apps", "launch" to "/launch", "shortcut" to "/shortcut", "help" to "/help"),
+            launcherCommands,
+        )
 }
