@@ -14,14 +14,14 @@ class LauncherViewModelTest {
     @Test fun commandsFilteringSelectionAndEditing() {
         val model = model()
         model.edit(value("/"))
-        assertEquals(listOf("launch", "shorcut"), model.state.results.map { it.label })
+        assertEquals(listOf("launch", "shorcut", "help"), model.state.results.map { it.label })
         model.edit(value("/lau"))
         assertEquals(listOf("launch"), model.state.results.map { it.label })
         model.moveSelection(99)
         assertEquals(0, model.state.highlighted)
         model.edit(value("/"))
         model.moveSelection(99)
-        assertEquals(1, model.state.highlighted)
+        assertEquals(2, model.state.highlighted)
         model.moveSelection(-99)
         assertEquals(0, model.state.highlighted)
         model.tab()
@@ -32,7 +32,7 @@ class LauncherViewModelTest {
         model.advance()
         model.edit(value("/"))
         assertNull(model.state.shortcutPage)
-        assertEquals(listOf("launch", "shorcut"), model.state.results.map { it.label })
+        assertEquals(listOf("launch", "shorcut", "help"), model.state.results.map { it.label })
 
         model.edit(value("/launch DEFAULT"))
         assertEquals(listOf("Make default"), model.state.results.map { it.label })
@@ -55,6 +55,43 @@ class LauncherViewModelTest {
         model.resetModifiers()
         assertFalse(model.state.ctrl)
         assertFalse(model.state.alt)
+    }
+
+    @Test fun helpShowsNonActionableReference() {
+        val model = model()
+        model.edit(value("/help"))
+        assertEquals(launcherHelp.map { it.first }, model.state.results.map { it.label })
+        assertEquals(launcherHelp.map { it.second }, model.state.results.map { it.description })
+        model.advance()
+        assertNull(model.state.effect)
+        assertEquals("/help", model.state.input.text)
+    }
+
+    @Test fun altCommandsIgnoreUnsupportedSelections() {
+        val model = model()
+        model.edit(value("/help"))
+        model.deleteSelected()
+        model.openSelectedAppSettings()
+        assertNull(model.state.effect)
+    }
+
+    @Test fun altDeletePersistsShortcutAndRetainsItWhenSavingFails() {
+        val shortcut = Shortcut("News")
+        val file = File.createTempFile("shortcuts", ".json").apply { delete() }
+        val store = ShortcutStore(file)
+        store.save(listOf(shortcut)).getOrThrow()
+        val model = LauncherViewModel(SavedStateHandle(), store, actions(), FakePackageStore())
+        model.deleteSelected()
+        assertEquals(emptyList<Shortcut>(), store.load().getOrThrow())
+        assertEquals(emptyList<String>(), model.state.results.map { it.label })
+
+        val blockedParent = File.createTempFile("shortcuts-parent", ".tmp")
+        val failingStore = ShortcutStore(File(blockedParent, "shortcuts.json"))
+        val failing = LauncherViewModel(SavedStateHandle(), failingStore, actions(), FakePackageStore())
+        failing.updateSources(shortcuts = listOf(shortcut))
+        failing.deleteSelected()
+        assertEquals(listOf("News"), failing.state.results.map { it.label })
+        assertTrue(failing.state.message!!.startsWith("cannot delete shortcut:"))
     }
 
     @Test fun shorcutCommandOpensMenuOrSearchesSavedShortcuts() {

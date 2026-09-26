@@ -4,6 +4,7 @@ import android.app.role.RoleManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.net.Uri
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivity
@@ -16,8 +17,17 @@ internal fun execute(activity: ComponentActivity, effect: LauncherEffect): Strin
             is LauncherEffect.ExecuteAction -> NativeActionExecutor(this).execute(effect.action)
             is LauncherEffect.ExecuteShortcut -> executeShortcut(effect.shortcut)
             is LauncherEffect.SaveShortcut -> null
+            is LauncherEffect.UninstallApp -> openPackage(Intent.ACTION_DELETE, effect.packageName)
+            is LauncherEffect.OpenAppSettings -> openPackage(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, effect.packageName)
         }
     }
+
+private fun ComponentActivity.openPackage(action: String, packageName: String): String? = try {
+    startActivity(Intent(action, Uri.parse("package:$packageName")))
+    null
+} catch (_: Exception) {
+    "cannot open package: $packageName"
+}
 
 interface ActionExecutor {
     fun execute(action: LauncherAction): String?

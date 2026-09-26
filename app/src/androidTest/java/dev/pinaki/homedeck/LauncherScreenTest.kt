@@ -3,12 +3,19 @@ package dev.pinaki.homedeck
 import android.content.ComponentName
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.SavedStateHandle
 import dev.pinaki.homedeck.ui.theme.HomeDeckTheme
 import org.junit.Rule
 import org.junit.Test
+import org.junit.Assert.assertEquals
 import java.io.File
 
 class LauncherScreenTest {
@@ -22,7 +29,7 @@ class LauncherScreenTest {
 
         compose.runOnIdle { model.edit(value("/")) }
         compose.onNodeWithText("launch").assertExists()
-        compose.onNodeWithText("shortcut").assertExists()
+        compose.onNodeWithText("shorcut").assertExists()
 
         compose.runOnIdle { model.edit(value("missing")) }
         compose.onNodeWithText("command not found: missing").assertExists()
@@ -45,6 +52,40 @@ class LauncherScreenTest {
             model.edit(value("News")); model.advance()
         }
         compose.onNodeWithText("action> ").assertExists()
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test fun physicalAltCommandsUseSelectedApp() {
+        val model = model()
+        model.updateSources(apps = listOf(LauncherApp("Calculator", ComponentName("com.example.calc", ".Main"))))
+        val effects = mutableListOf<LauncherEffect>()
+        compose.setContent { HomeDeckTheme { LauncherScreen(model) { effects += it; null } } }
+
+        compose.onNode(hasSetTextAction()).performKeyInput {
+            keyDown(Key.AltLeft); keyDown(Key.D); keyUp(Key.D); keyUp(Key.AltLeft)
+        }
+        compose.runOnIdle { assertEquals(LauncherEffect.UninstallApp("com.example.calc"), effects.single()) }
+
+        compose.onNode(hasSetTextAction()).performKeyInput {
+            keyDown(Key.AltLeft); keyDown(Key.S); keyUp(Key.S); keyUp(Key.AltLeft)
+        }
+        compose.runOnIdle { assertEquals(LauncherEffect.OpenAppSettings("com.example.calc"), effects.last()) }
+    }
+
+    @Test fun onScreenAltExposesCommands() {
+        val model = model()
+        model.updateSources(apps = listOf(LauncherApp("Calculator", ComponentName("com.example.calc", ".Main"))))
+        val alt = mutableStateOf(false)
+        compose.setContent { HomeDeckTheme { ExtraKeys(false, alt.value) { key ->
+            when (key) {
+                "ALT" -> alt.value = !alt.value
+                "D" -> { model.deleteSelected(); alt.value = false }
+            }
+        } } }
+
+        compose.onNodeWithText("ALT").performClick()
+        compose.onNodeWithText("D").performClick()
+        compose.runOnIdle { assertEquals(LauncherEffect.UninstallApp("com.example.calc"), model.state.effect) }
     }
 
     private fun value(text: String) = TextFieldValue(text, TextRange(text.length))

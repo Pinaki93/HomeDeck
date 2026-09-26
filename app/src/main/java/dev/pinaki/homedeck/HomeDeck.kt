@@ -104,6 +104,10 @@ internal fun LauncherScreen(
                 value = state.input, onValueChange = viewModel::edit,
                 modifier = Modifier.weight(1f).focusRequester(focusRequester).onPreviewKeyEvent {
                     if (it.nativeKeyEvent.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
+                    if (it.nativeKeyEvent.isAltPressed) when (it.nativeKeyEvent.keyCode) {
+                        KeyEvent.KEYCODE_D -> { viewModel.deleteSelected(); return@onPreviewKeyEvent true }
+                        KeyEvent.KEYCODE_S -> { viewModel.openSelectedAppSettings(); return@onPreviewKeyEvent true }
+                    }
                     when (it.nativeKeyEvent.keyCode) {
                         KeyEvent.KEYCODE_DPAD_UP -> viewModel.moveSelection(-1)
                         KeyEvent.KEYCODE_DPAD_DOWN -> viewModel.moveSelection(1)
@@ -129,6 +133,8 @@ internal fun LauncherScreen(
             when (key) {
                 "CTRL" -> viewModel.toggleModifier(true)
                 "ALT" -> viewModel.toggleModifier(false)
+                "D" -> viewModel.deleteSelected()
+                "S" -> viewModel.openSelectedAppSettings()
                 "ESC" -> viewModel.back()
                 "TAB" -> viewModel.tab()
                 "/", "-" -> viewModel.insert(key)
@@ -139,7 +145,9 @@ internal fun LauncherScreen(
                 "↑" -> viewModel.moveSelection(-1)
                 "↓" -> viewModel.moveSelection(1)
             }
-            if (key != "CTRL" && key != "ALT") consumeModifiers(key)
+            if (key != "CTRL" && key != "ALT") {
+                if (key == "D" || key == "S") viewModel.resetModifiers() else consumeModifiers(key)
+            }
         }
         if (!imeVisible) Spacer(Modifier.navigationBarsPadding())
     }
@@ -154,23 +162,30 @@ private fun LauncherList(
         state = state, userScrollEnabled = false, modifier = modifier.fillMaxWidth(),
     ) {
         itemsIndexed(entries, key = { _, entry -> entry.key }) { index, entry ->
-            Text(
-                entry.label,
+            Column(
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 2.dp)
                     .clip(MaterialTheme.shapes.small)
                     .background(if (index == highlighted) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
                     .padding(horizontal = 10.dp, vertical = 12.dp),
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
+            ) {
+                Text(
+                    entry.label,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    style = if (entry.description == null) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.titleMedium,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+                entry.description?.let {
+                    Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun ExtraKeys(ctrl: Boolean, alt: Boolean, onKey: (String) -> Unit) {
+internal fun ExtraKeys(ctrl: Boolean, alt: Boolean, onKey: (String) -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -178,7 +193,7 @@ private fun ExtraKeys(ctrl: Boolean, alt: Boolean, onKey: (String) -> Unit) {
             .navigationBarsPadding()
     ) {
         listOf(
-            listOf("ESC", "/", "-", "HOME", "↑", "END"),
+            listOf("ESC", "/", "-", "HOME", "↑", "END") + if (alt) listOf("D", "S") else emptyList(),
             listOf("TAB", "CTRL", "ALT", "←", "↓", "→"),
         ).forEach { keys ->
             Row(Modifier.fillMaxWidth()) {

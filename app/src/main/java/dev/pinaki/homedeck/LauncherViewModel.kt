@@ -19,7 +19,15 @@ internal fun actionQuery(input: String): String? = when {
 internal fun shortcutQuery(input: String): String? =
     input.takeIf { it.startsWith("/shorcut ") }?.removePrefix("/shorcut ")
 
-internal val launcherCommands = listOf("launch" to "/launch", "shorcut" to "/shorcut")
+internal val launcherCommands = listOf("launch" to "/launch", "shorcut" to "/shorcut", "help" to "/help")
+
+internal val launcherHelp = listOf(
+    "/help" to "Command reference",
+    "/launch <query>" to "Search actions",
+    "/shorcut [query]" to "Manage or search shortcuts",
+    "Alt+D" to "Uninstall selected app or delete selected shortcut",
+    "Alt+S" to "Open settings for selected app",
+)
 
 internal fun <T> filterAndSortApps(
     apps: List<T>, query: String, locale: Locale = Locale.getDefault(), label: (T) -> String,
@@ -36,11 +44,12 @@ internal sealed interface LauncherTarget {
     data class IntentPackage(val packageName: String?) : LauncherTarget
     data object SaveShortcut : LauncherTarget
     data class Command(val completion: String) : LauncherTarget
+    data object Reference : LauncherTarget
 }
 
 internal data class LauncherEntry(
     val key: String, val label: String, val completion: String? = null,
-    val target: LauncherTarget,
+    val target: LauncherTarget, val description: String? = null,
 )
 
 internal sealed interface LauncherEffect {
@@ -48,6 +57,8 @@ internal sealed interface LauncherEffect {
     data class ExecuteAction(val action: LauncherAction) : LauncherEffect
     data class ExecuteShortcut(val shortcut: Shortcut) : LauncherEffect
     data class SaveShortcut(val shortcut: Shortcut, val shortcuts: List<Shortcut>) : LauncherEffect
+    data class UninstallApp(val packageName: String) : LauncherEffect
+    data class OpenAppSettings(val packageName: String) : LauncherEffect
 }
 
 internal data class LauncherState(
@@ -169,6 +180,28 @@ internal class LauncherViewModel(
         state = state.copy(ctrl = false, alt = false)
     }
 
+    fun deleteSelected() {
+        when (val target = state.results.getOrNull(state.highlighted)?.target) {
+            is LauncherTarget.App -> state = state.copy(
+                effect = LauncherEffect.UninstallApp(target.value.component.packageName),
+            )
+            is LauncherTarget.SavedShortcut -> {
+                val remaining = shortcuts - target.value
+                shortcutStore.save(remaining).fold(
+                    onSuccess = { shortcuts = remaining; state = state.copy(message = null) },
+                    onFailure = { state = state.copy(message = "cannot delete shortcut: ${it.message}") },
+                )
+                refresh()
+            }
+            else -> Unit
+        }
+    }
+
+    fun openSelectedAppSettings() {
+        val app = (state.results.getOrNull(state.highlighted)?.target as? LauncherTarget.App)?.value ?: return
+        state = state.copy(effect = LauncherEffect.OpenAppSettings(app.component.packageName))
+    }
+
     fun completeEffect(error: String?) {
         val effect = state.effect
         val completionError = error ?: (effect as? LauncherEffect.SaveShortcut)?.let {
@@ -215,6 +248,7 @@ internal class LauncherViewModel(
             is LauncherTarget.App -> state = state.copy(effect = LauncherEffect.LaunchApp(target.value), input = TextFieldValue())
             is LauncherTarget.Action -> state = state.copy(effect = LauncherEffect.ExecuteAction(target.value), input = TextFieldValue())
             is LauncherTarget.SavedShortcut -> state = state.copy(effect = LauncherEffect.ExecuteShortcut(target.value))
+            LauncherTarget.Reference -> Unit
         }
         refresh()
     }
@@ -269,6 +303,9 @@ internal class LauncherViewModel(
             val query = actionQuery(state.input.text)
             val shortcutQuery = shortcutQuery(state.input.text)
             when {
+                state.input.text == "/help" -> launcherHelp.mapIndexed { index, (label, description) ->
+                    LauncherEntry("help:$index", label, description = description, target = LauncherTarget.Reference)
+                }
                 state.input.text.startsWith("/") && query == null && shortcutQuery == null ->
                     launcherCommands.filter { (_, completion) -> completion.startsWith(state.input.text) }
                         .map { (label, completion) ->

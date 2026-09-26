@@ -40,5 +40,5 @@ class LauncherFilterTest {
     }
 
     @Test fun slashShowsLaunchCommand() =
-        assertEquals(listOf("launch" to "/launch", "shorcut" to "/shorcut"), launcherCommands)
+        assertEquals(listOf("launch" to "/launch", "shorcut" to "/shorcut", "help" to "/help"), launcherCommands)
 }
