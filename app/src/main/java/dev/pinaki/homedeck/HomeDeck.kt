@@ -106,6 +106,7 @@ internal fun LauncherScreen(
                     if (it.nativeKeyEvent.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
                     if (it.nativeKeyEvent.isAltPressed) when (it.nativeKeyEvent.keyCode) {
                         KeyEvent.KEYCODE_D -> { viewModel.deleteSelected(); return@onPreviewKeyEvent true }
+                        KeyEvent.KEYCODE_E -> { viewModel.editSelected(); return@onPreviewKeyEvent true }
                         KeyEvent.KEYCODE_S -> { viewModel.openSelectedAppSettings(); return@onPreviewKeyEvent true }
                     }
                     when (it.nativeKeyEvent.keyCode) {
@@ -134,6 +135,7 @@ internal fun LauncherScreen(
                 "CTRL" -> viewModel.toggleModifier(true)
                 "ALT" -> viewModel.toggleModifier(false)
                 "D" -> viewModel.deleteSelected()
+                "E" -> viewModel.editSelected()
                 "S" -> viewModel.openSelectedAppSettings()
                 "ESC" -> viewModel.back()
                 "TAB" -> viewModel.tab()
@@ -146,7 +148,7 @@ internal fun LauncherScreen(
                 "↓" -> viewModel.moveSelection(1)
             }
             if (key != "CTRL" && key != "ALT") {
-                if (key == "D" || key == "S") viewModel.resetModifiers() else consumeModifiers(key)
+                if (key == "D" || key == "E" || key == "S") viewModel.resetModifiers() else consumeModifiers(key)
             }
         }
         if (!imeVisible) Spacer(Modifier.navigationBarsPadding())
@@ -193,7 +195,7 @@ internal fun ExtraKeys(ctrl: Boolean, alt: Boolean, onKey: (String) -> Unit) {
             .navigationBarsPadding()
     ) {
         listOf(
-            listOf("ESC", "/", "-", "HOME", "↑", "END") + if (alt) listOf("D", "S") else emptyList(),
+            listOf("ESC", "/", "-", "HOME", "↑", "END") + if (alt) listOf("D", "E", "S") else emptyList(),
             listOf("TAB", "CTRL", "ALT", "←", "↓", "→"),
         ).forEach { keys ->
             Row(Modifier.fillMaxWidth()) {

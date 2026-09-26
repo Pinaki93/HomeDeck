@@ -26,6 +26,7 @@ internal val launcherHelp = listOf(
     "/launch <query>" to "Search actions",
     "/shorcut [query]" to "Manage or search shortcuts",
     "Alt+D" to "Uninstall selected app or delete selected shortcut",
+    "Alt+E" to "Edit selected shortcut",
     "Alt+S" to "Open settings for selected app",
 )
 
@@ -90,6 +91,8 @@ internal class LauncherViewModel(
         emptyList()
     }
     private var compatiblePackages = emptyList<LauncherPackage>()
+    private var editingShortcut: Shortcut? = null
+    private var editOrigin: LauncherState? = null
 
     init { refresh() }
 
@@ -136,6 +139,14 @@ internal class LauncherViewModel(
     }
 
     fun back() {
+        if (state.shortcutPage == ShortcutPage.NAME && editingShortcut != null) {
+            state = editOrigin?.copy(message = null, effect = null) ?: state
+            savedStateHandle[INPUT] = state.input.text
+            editingShortcut = null
+            editOrigin = null
+            refresh()
+            return
+        }
         val draft = state.shortcutPage?.takeIf { it in ShortcutPage.NAME..ShortcutPage.COMPONENT }
             ?.let { state.draft.withField(it, state.input.text) } ?: state.draft
         val previous = state.shortcutPage?.previous()
@@ -158,8 +169,9 @@ internal class LauncherViewModel(
             return
         }
         val draft = state.draft.withField(page, state.input.text)
+        val existingShortcuts = editingShortcut?.let { shortcuts - it } ?: shortcuts
         val error = when (page) {
-            ShortcutPage.NAME -> shortcutError(draft, shortcuts)?.takeIf { it.startsWith("name") || it.startsWith("shortcut") }
+            ShortcutPage.NAME -> shortcutError(draft, existingShortcuts)?.takeIf { it.startsWith("name") || it.startsWith("shortcut") }
             ShortcutPage.ACTION -> shortcutError(draft, shortcuts)?.takeIf { it.startsWith("action") }
             ShortcutPage.COMPONENT -> shortcutError(draft, shortcuts)?.takeIf { it.startsWith("component") }
             else -> null
@@ -202,6 +214,18 @@ internal class LauncherViewModel(
         state = state.copy(effect = LauncherEffect.OpenAppSettings(app.component.packageName))
     }
 
+    fun editSelected() {
+        val shortcut = (state.results.getOrNull(state.highlighted)?.target as? LauncherTarget.SavedShortcut)?.value
+            ?: return
+        editingShortcut = shortcut
+        editOrigin = state.copy(ctrl = false, alt = false)
+        state = state.copy(
+            input = textValue(shortcut.name), shortcutPage = ShortcutPage.NAME, draft = shortcut,
+            message = null, ctrl = false, alt = false,
+        )
+        refresh()
+    }
+
     fun completeEffect(error: String?) {
         val effect = state.effect
         val completionError = error ?: (effect as? LauncherEffect.SaveShortcut)?.let {
@@ -210,9 +234,11 @@ internal class LauncherViewModel(
             }
         }
         if (completionError == null && effect is LauncherEffect.SaveShortcut) {
-            shortcuts = shortcuts + effect.shortcut
+            shortcuts = effect.shortcuts
             shortcutLoadError = null
             state = state.copy(shortcutPage = ShortcutPage.MENU, message = null, effect = null)
+            editingShortcut = null
+            editOrigin = null
         } else state = state.copy(message = completionError, effect = null)
         refresh()
     }
@@ -228,10 +254,14 @@ internal class LauncherViewModel(
                 )
                 refresh()
             }
-            LauncherTarget.AddShortcut -> state = state.copy(
-                draft = Shortcut(name = ""), shortcutPage = ShortcutPage.TYPE,
-                input = TextFieldValue(), message = null,
-            )
+            LauncherTarget.AddShortcut -> {
+                editingShortcut = null
+                editOrigin = null
+                state = state.copy(
+                    draft = Shortcut(name = ""), shortcutPage = ShortcutPage.TYPE,
+                    input = TextFieldValue(), message = null,
+                )
+            }
             is LauncherTarget.ShortcutPreset -> state = state.copy(
                 draft = state.draft.copy(action = target.value.action, data = target.value.data),
                 shortcutPage = ShortcutPage.NAME, input = TextFieldValue(), message = null,
@@ -242,9 +272,14 @@ internal class LauncherViewModel(
                 shortcutPage = ShortcutPage.COMPONENT,
                 input = textValue(state.draft.component), message = null,
             )
-            LauncherTarget.SaveShortcut -> state = state.copy(
-                effect = LauncherEffect.SaveShortcut(state.draft, shortcuts + state.draft), input = TextFieldValue(),
-            )
+            LauncherTarget.SaveShortcut -> {
+                val updated = editingShortcut?.let { original ->
+                    shortcuts.map { if (it == original) state.draft else it }
+                } ?: shortcuts + state.draft
+                state = state.copy(
+                    effect = LauncherEffect.SaveShortcut(state.draft, updated), input = TextFieldValue(),
+                )
+            }
             is LauncherTarget.App -> state = state.copy(effect = LauncherEffect.LaunchApp(target.value), input = TextFieldValue())
             is LauncherTarget.Action -> state = state.copy(effect = LauncherEffect.ExecuteAction(target.value), input = TextFieldValue())
             is LauncherTarget.SavedShortcut -> state = state.copy(effect = LauncherEffect.ExecuteShortcut(target.value))

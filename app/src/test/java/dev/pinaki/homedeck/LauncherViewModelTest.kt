@@ -71,8 +71,51 @@ class LauncherViewModelTest {
         val model = model()
         model.edit(value("/help"))
         model.deleteSelected()
+        model.editSelected()
         model.openSelectedAppSettings()
         assertNull(model.state.effect)
+    }
+
+    @Test fun altEditCancelsOrReplacesShortcutWithoutDuplicatingIt() {
+        val original = Shortcut("News", data = "https://example.com")
+        val weather = Shortcut("Weather")
+        val file = File.createTempFile("shortcuts", ".json").apply { delete() }
+        val store = ShortcutStore(file)
+        store.save(listOf(original, weather)).getOrThrow()
+        val model = LauncherViewModel(SavedStateHandle(), store, actions(), FakePackageStore())
+
+        model.edit(value("new"))
+        model.editSelected()
+        assertEquals(ShortcutPage.NAME, model.state.shortcutPage)
+        assertEquals(original, model.state.draft)
+        assertEquals("News", model.state.input.text)
+        model.edit(value("Draft"))
+        model.back()
+        assertNull(model.state.shortcutPage)
+        assertEquals("new", model.state.input.text)
+        assertEquals(listOf("News"), model.state.results.map { it.label })
+        assertEquals(listOf(original, weather), store.load().getOrThrow())
+
+        model.editSelected()
+        model.edit(value("Weather")); model.advance()
+        assertEquals("shortcut already exists: Weather", model.state.message)
+        model.edit(value("Latest")); model.advance() // action
+        model.advance() // data
+        model.advance() // package
+        model.advance() // any compatible app
+        model.advance() // component
+        model.advance() // save
+
+        val effect = model.state.effect as LauncherEffect.SaveShortcut
+        assertEquals(listOf(original.copy(name = "Latest"), weather), effect.shortcuts)
+        model.completeEffect("disk full")
+        assertEquals(listOf(original, weather), store.load().getOrThrow())
+        assertEquals(ShortcutPage.CONFIRM, model.state.shortcutPage)
+
+        model.advance()
+        model.completeEffect(null)
+        assertEquals(listOf(original.copy(name = "Latest"), weather), store.load().getOrThrow())
+        assertEquals(listOf("Add shortcut", "Latest", "Weather"), model.state.results.map { it.label })
     }
 
     @Test fun altDeletePersistsShortcutAndRetainsItWhenSavingFails() {

@@ -72,20 +72,35 @@ class LauncherScreenTest {
         compose.runOnIdle { assertEquals(LauncherEffect.OpenAppSettings("com.example.calc"), effects.last()) }
     }
 
+    @OptIn(ExperimentalTestApi::class)
+    @Test fun physicalAltEditUsesSelectedShortcut() {
+        val model = model()
+        model.updateSources(shortcuts = listOf(Shortcut("News")))
+        compose.setContent { HomeDeckTheme { LauncherScreen(model) { null } } }
+
+        compose.onNode(hasSetTextAction()).performKeyInput {
+            keyDown(Key.AltLeft); keyDown(Key.E); keyUp(Key.E); keyUp(Key.AltLeft)
+        }
+        compose.runOnIdle {
+            assertEquals(ShortcutPage.NAME, model.state.shortcutPage)
+            assertEquals("News", model.state.input.text)
+        }
+    }
+
     @Test fun onScreenAltExposesCommands() {
         val model = model()
-        model.updateSources(apps = listOf(LauncherApp("Calculator", ComponentName("com.example.calc", ".Main"))))
+        model.updateSources(shortcuts = listOf(Shortcut("News")))
         val alt = mutableStateOf(false)
         compose.setContent { HomeDeckTheme { ExtraKeys(false, alt.value) { key ->
             when (key) {
                 "ALT" -> alt.value = !alt.value
-                "D" -> { model.deleteSelected(); alt.value = false }
+                "E" -> { model.editSelected(); alt.value = false }
             }
         } } }
 
         compose.onNodeWithText("ALT").performClick()
-        compose.onNodeWithText("D").performClick()
-        compose.runOnIdle { assertEquals(LauncherEffect.UninstallApp("com.example.calc"), model.state.effect) }
+        compose.onNodeWithText("E").performClick()
+        compose.runOnIdle { assertEquals(ShortcutPage.NAME, model.state.shortcutPage) }
     }
 
     private fun value(text: String) = TextFieldValue(text, TextRange(text.length))
