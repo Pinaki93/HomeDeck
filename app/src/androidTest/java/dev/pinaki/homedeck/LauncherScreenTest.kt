@@ -29,7 +29,7 @@ class LauncherScreenTest {
 
         compose.runOnIdle { model.edit(value("/")) }
         compose.onNodeWithText("launch").assertExists()
-        compose.onNodeWithText("shorcut").assertExists()
+        compose.onNodeWithText("shortcut").assertExists()
 
         compose.runOnIdle { model.edit(value("missing")) }
         compose.onNodeWithText("command not found: missing").assertExists()

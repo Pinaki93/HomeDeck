@@ -14,7 +14,7 @@ class LauncherViewModelTest {
     @Test fun commandsFilteringSelectionAndEditing() {
         val model = model()
         model.edit(value("/"))
-        assertEquals(listOf("launch", "shorcut", "help"), model.state.results.map { it.label })
+        assertEquals(listOf("launch", "shortcut", "help"), model.state.results.map { it.label })
         model.edit(value("/lau"))
         assertEquals(listOf("launch"), model.state.results.map { it.label })
         model.moveSelection(99)
@@ -32,7 +32,7 @@ class LauncherViewModelTest {
         model.advance()
         model.edit(value("/"))
         assertNull(model.state.shortcutPage)
-        assertEquals(listOf("launch", "shorcut", "help"), model.state.results.map { it.label })
+        assertEquals(listOf("launch", "shortcut", "help"), model.state.results.map { it.label })
 
         model.edit(value("/launch DEFAULT"))
         assertEquals(listOf("Make default"), model.state.results.map { it.label })
@@ -137,23 +137,24 @@ class LauncherViewModelTest {
         assertTrue(failing.state.message!!.startsWith("cannot delete shortcut:"))
     }
 
-    @Test fun shorcutCommandOpensMenuOrSearchesSavedShortcuts() {
+    @Test fun shortcutCommandOpensMenuOrSearchesSavedShortcuts() {
         val model = model()
         model.updateSources(
             shortcuts = listOf(Shortcut("News"), Shortcut("Weather")),
         )
 
-        model.edit(value("/shorcut"))
+        model.edit(value("/shortcut"))
         assertEquals(listOf("Add shortcut", "News", "Weather"), model.state.results.map { it.label })
 
-        model.edit(value("/shorcut new"))
+        model.edit(value("/shortcut new"))
         assertEquals(listOf("News"), model.state.results.map { it.label })
     }
 
     @Test fun shortcutFormPreservesFieldsValidatesAndSaves() {
+        val handle = SavedStateHandle()
         val store = store()
         val packages = FakePackageStore(Result.success(listOf(LauncherPackage("Example", "com.example"))))
-        val model = LauncherViewModel(SavedStateHandle(), store, actions(), packages)
+        val model = LauncherViewModel(handle, store, actions(), packages)
         model.updateSources(shortcuts = listOf(Shortcut("Existing")))
         openShortcutForm(model)
 
@@ -192,14 +193,17 @@ class LauncherViewModelTest {
         assertEquals(2, effect.shortcuts.size)
         model.completeEffect("disk full")
         assertEquals(ShortcutPage.CONFIRM, model.state.shortcutPage)
+        assertEquals("", model.state.input.text)
         assertEquals("disk full", model.state.message)
 
         model.advance()
         model.completeEffect(null)
         assertEquals(ShortcutPage.MENU, model.state.shortcutPage)
+        assertEquals("/shortcut", model.state.input.text)
         assertEquals(listOf("Add shortcut", "Existing", "News"), model.state.results.map { it.label })
         assertNull(model.state.message)
         assertEquals(listOf("Existing", "News"), store.load().getOrThrow().map { it.name })
+        assertEquals("/shortcut", LauncherViewModel(handle, store, actions(), packages).state.input.text)
     }
 
     @Test fun shortcutPresetPopulatesIntentAndAnyAppLeavesPackageEmpty() {
@@ -286,11 +290,11 @@ class LauncherViewModelTest {
         model.moveSelection(1)
         model.advance()
         assertEquals(LauncherEffect.ExecuteShortcut(shortcut), model.state.effect)
-        assertEquals("/shorcut", model.state.input.text)
+        assertEquals("/shortcut", model.state.input.text)
         model.completeEffect(null)
         assertNull(model.state.effect)
         assertNull(model.state.message)
-        assertEquals("/shorcut", LauncherViewModel(handle, store(), actions(), FakePackageStore()).state.input.text)
+        assertEquals("/shortcut", LauncherViewModel(handle, store(), actions(), FakePackageStore()).state.input.text)
     }
 
     private fun openShortcutForm(model: LauncherViewModel) {

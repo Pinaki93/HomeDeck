@@ -17,14 +17,14 @@ internal fun actionQuery(input: String): String? = when {
 }
 
 internal fun shortcutQuery(input: String): String? =
-    input.takeIf { it.startsWith("/shorcut ") }?.removePrefix("/shorcut ")
+    input.takeIf { it.startsWith("/shortcut ") }?.removePrefix("/shortcut ")
 
-internal val launcherCommands = listOf("launch" to "/launch", "shorcut" to "/shorcut", "help" to "/help")
+internal val launcherCommands = listOf("launch" to "/launch", "shortcut" to "/shortcut", "help" to "/help")
 
 internal val launcherHelp = listOf(
     "/help" to "Command reference",
     "/launch <query>" to "Search actions",
-    "/shorcut [query]" to "Manage or search shortcuts",
+    "/shortcut [query]" to "Manage or search shortcuts",
     "Alt+D" to "Uninstall selected app or delete selected shortcut",
     "Alt+E" to "Edit selected shortcut",
     "Alt+S" to "Open settings for selected app",
@@ -111,7 +111,7 @@ internal class LauncherViewModel(
         savedStateHandle[INPUT] = value.text
         state = state.copy(
             input = value,
-            shortcutPage = ShortcutPage.MENU.takeIf { value.text == "/shorcut" }
+            shortcutPage = ShortcutPage.MENU.takeIf { value.text == "/shortcut" }
                 ?: state.shortcutPage.takeUnless { it == ShortcutPage.MENU },
             message = null,
         )
@@ -236,7 +236,10 @@ internal class LauncherViewModel(
         if (completionError == null && effect is LauncherEffect.SaveShortcut) {
             shortcuts = effect.shortcuts
             shortcutLoadError = null
-            state = state.copy(shortcutPage = ShortcutPage.MENU, message = null, effect = null)
+            savedStateHandle[INPUT] = "/shortcut"
+            state = state.copy(
+                input = textValue("/shortcut"), shortcutPage = ShortcutPage.MENU, message = null, effect = null,
+            )
             editingShortcut = null
             editOrigin = null
         } else state = state.copy(message = completionError, effect = null)
@@ -249,7 +252,7 @@ internal class LauncherViewModel(
                 savedStateHandle[INPUT] = target.completion
                 state = state.copy(
                     input = textValue(target.completion),
-                    shortcutPage = ShortcutPage.MENU.takeIf { target.completion == "/shorcut" },
+                    shortcutPage = ShortcutPage.MENU.takeIf { target.completion == "/shortcut" },
                     message = null,
                 )
                 refresh()
