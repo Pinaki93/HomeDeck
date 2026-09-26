@@ -5,6 +5,18 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class LauncherFilterTest {
+    @Test fun installedBrowsersAreAddedOnlyForWebShortcuts() {
+        val chrome = LauncherPackage("Chrome", "com.android.chrome")
+        assertEquals(
+            listOf(LauncherPackage("Chrome", "com.android.chrome")),
+            addInstalledBrowsers(Shortcut("Web", data = "https://example.com"), emptyList(), listOf(chrome)),
+        )
+        assertEquals(
+            emptyList<LauncherPackage>(),
+            addInstalledBrowsers(Shortcut("Phone", data = "tel:123"), emptyList(), listOf(chrome)),
+        )
+    }
+
     private val apps = listOf("Zulu", "alpha", "Calculator")
 
     @Test fun emptyQueryReturnsLocalizedOrder() =
@@ -17,13 +29,16 @@ class LauncherFilterTest {
         assertEquals(emptyList<String>(), filterAndSortApps(apps, "terminal", Locale.US) { it })
 
     @Test fun launcherActionCommandExtractsItsQueryOnly() {
-        assertEquals("", actionQuery("/l"))
-        assertEquals("default", actionQuery("/l default"))
-        assertEquals(null, actionQuery("/launch"))
+        assertEquals("", actionQuery("/launch"))
+        assertEquals("default", actionQuery("/launch default"))
+        assertEquals(null, actionQuery("/l"))
     }
 
     @Test fun actionFilteringIgnoresCase() {
         val actions = listOf(LauncherAction("Make HomeDeck the default app"))
-        assertEquals(actions, filterAndSortApps(actions, actionQuery("/l HOME")!!) { it.name })
+        assertEquals(actions, filterAndSortApps(actions, actionQuery("/launch HOME")!!) { it.name })
     }
+
+    @Test fun slashShowsLaunchCommand() =
+        assertEquals(listOf("launch" to "/launch", "shorcut" to "/shorcut"), launcherCommands)
 }
